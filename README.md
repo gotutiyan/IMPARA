@@ -168,3 +168,11 @@ python correlation.py --human Grundkiewicz15_EW.txt --system result.txt
 ```
 
 The input of the `correleation.py` is 12 values separated by comma, corresponding to scores. 12 values correspond to `CAMB CUUI AMU POST NTHU RAC UMC PKU SJTU UFC IPN IITB` order.
+
+I performed correlation experiments on the supervision data generated with three different seeds.
+
+|Seed|Pearson|Spearman|
+|:--|:-:|:-:|
+|1|0.884|0.888|
+|2|0.938|0.923|
+|5|0.943|0.937|
