@@ -1,4 +1,4 @@
-from transformers import AutoModel, AutoTokenizer, AutoConfig
+from transformers import AutoModel, AutoTokenizer, AutoConfig, BertForSequenceClassification
 import torch
 import torch.nn as nn
 from torch.nn import CosineSimilarity
@@ -38,29 +38,9 @@ class SimilarityEstimator(nn.Module):
         length = torch.sum(mask, dim=-1) # batch x
         pooled_logits = torch.div(sum_logits.transpose(1, 0), length).transpose(1, 0) # batch x hidden
         return pooled_logits
-    
-class QualityEstimator(nn.Module):
-    def __init__(self, model_id: str):
-        super().__init__()
-        self.bert = AutoModel.from_pretrained(model_id)
-        config = AutoConfig.from_pretrained(model_id)
-        self.linear = nn.Linear(config.hidden_size, 1)
-    
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor
-    ) -> torch.Tensor:
-        out = self.bert(
-            input_ids,
-            attention_mask
-        )
-        cls_token = out.last_hidden_state[:, 0, :]
-        pred = self.linear(cls_token)
-        return pred
 
 class QualityEstimatorForTrain(nn.Module):
-    def __init__(self, qe_model: QualityEstimator):
+    def __init__(self, qe_model: BertForSequenceClassification):
         super().__init__()
         self.model = qe_model
     
@@ -74,11 +54,11 @@ class QualityEstimatorForTrain(nn.Module):
         low_scores = self.model(
             low_input_ids,
             low_attention_mask
-        )
+        ).logits
         high_scores = self.model(
             high_input_ids,
             high_attention_mask
-        )
+        ).logits
         loss = torch.sigmoid(low_scores - high_scores)
         loss = torch.mean(loss)
         return loss
@@ -88,7 +68,7 @@ class IMPARA(nn.Module):
     def __init__(
         self,
         se_model: SimilarityEstimator,
-        qe_model: QualityEstimator,
+        qe_model: BertForSequenceClassification,
         threshold: float=0.9
     ):
         super().__init__()
@@ -112,7 +92,7 @@ class IMPARA(nn.Module):
         qe = self.qe_model(
             pred_input_ids,
             pred_attention_mask
-        ).view(-1)
+        ).logits.view(-1)
         qe = torch.sigmoid(qe)
         idx = se > self.threshold
         score = torch.zeros_like(se)

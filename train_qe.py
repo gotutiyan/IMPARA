@@ -1,7 +1,7 @@
 
 import argparse
-from modeling import QualityEstimator, QualityEstimatorForTrain
-from transformers import AutoTokenizer, AutoConfig
+from modeling import QualityEstimatorForTrain
+from transformers import AutoTokenizer, BertForSequenceClassification
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -32,17 +32,15 @@ def train(
                 accelerator.backward(loss)
                 optimizer.step()
                 optimizer.zero_grad()
-
                 log['loss'] += loss.item()
-            
-                if accelerator.is_main_process:
-                    pbar.set_description(f'[Epoch {epoch}] [TRAIN]')
-                    pbar.set_postfix(OrderedDict(
-                        loss=loss.item()
-                    ))
+                pbar.set_description(f'[Epoch {epoch}] [TRAIN]')
+                pbar.set_postfix(OrderedDict(
+                    loss=loss.item()
+                ))
     return {k: v/len(loader) for k, v in log.items()}
 
-def valid(model: QualityEstimatorForTrain,
+def valid(
+    model: QualityEstimatorForTrain,
     loader: DataLoader,
     epoch: int,
     accelerator: Accelerator
@@ -56,40 +54,31 @@ def valid(model: QualityEstimatorForTrain,
             for _, batch in pbar:
                 with accelerator.accumulate(model):
                     loss = model(**batch)
-                    # loss = outputs['loss']
-
                     log['loss'] += loss.item()
-                    
-                    if accelerator.is_main_process:
-                        pbar.set_description(f'[Epoch {epoch}] [VALID]')
-                        pbar.set_postfix(OrderedDict(
-                            loss=loss.item()
-                        ))
+                    pbar.set_description(f'[Epoch {epoch}] [VALID]')
+                    pbar.set_postfix(OrderedDict(
+                        loss=loss.item()
+                    ))
     return {k: v/len(loader) for k, v in log.items()}
 
 def main(args):
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
+    config = json.load(open(os.path.join(args.restore_dir, 'impara_config.json'))) if args.restore_dir else {}
+    model_id = config.get('model_id', args.model_id)
+    current_epoch = config.get('current_epoch', 0)
+    min_valid_loss = config.get('min_valid_loss', float('inf'))
+    seed = config.get('seed', args.seed)
+    log_dict = json.load(open(os.path.join(args.restore_dir, '../log.json'))) if args.restore_dir else {}
+    
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
     torch.backends.cudnn.deterministic = True
 
     if args.restore_dir is not None:
-        config = json.load(open(os.path.join(args.restore_dir, 'impara_config.json')))
-        model_id = config['model_id']
-        qe_model = QualityEstimator(model_id)
-        qe_model.load_state_dict(torch.load(os.path.join(args.restore_dir, 'pytorch_model.bin')))
-        current_epoch = config['epoch'] + 1
-        min_valid_loss = config['min_valid_loss']
-        log_dict = json.load(open(os.path.join(args.restore_dir, '../log.json')))
+        qe_model = BertForSequenceClassification.from_pretrained(args.restore_dir)
     else:
-        model_id = args.model_id
-        config = AutoConfig.from_pretrained(model_id)
-        qe_model = QualityEstimator(model_id)
-        current_epoch = 0
-        min_valid_loss = 1e9
-        log_dict = {}
+        qe_model = BertForSequenceClassification.from_pretrained(model_id, num_labels=1)
     model = QualityEstimatorForTrain(qe_model)
-    
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     train_dataset = generate_dataset(
@@ -114,25 +103,28 @@ def main(args):
         
         if accelerator.is_main_process:
             log_dict[f'Epoch {epoch}'] = {
-                'train_loss': train_log,
-                'valid_loss': valid_log
+                'train_log': train_log,
+                'valid_log': valid_log
             }
             if min_valid_loss > valid_log['loss']:
-                torch.save(qe_model.state_dict(), os.path.join(args.outdir, 'best/pytorch_model.bin'))
+                qe_model.save_pretrained(os.path.join(args.outdir, 'best'))
                 min_valid_loss = valid_log['loss']
                 config_dict = {
                     'model_id': model_id,
                     'epoch': epoch,
-                    'min_valid_loss': min_valid_loss
+                    'min_valid_loss': min_valid_loss,
+                    'seed': args.seed
                 }
                 with open(os.path.join(args.outdir, 'best/impara_config.json'), 'w') as fp:
                     json.dump(config_dict, fp, indent=4)
+    accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        torch.save(qe_model.state_dict(), os.path.join(args.outdir, 'last/pytorch_model.bin'))
+        qe_model.save_pretrained(os.path.join(args.outdir, 'last'))
         config_dict = {
             'model_id': model_id,
             'epoch': epoch,
-            'min_valid_loss': min_valid_loss
+            'min_valid_loss': min_valid_loss,
+            'seed': args.seed
         }
         with open(os.path.join(args.outdir, 'last/impara_config.json'), 'w') as fp:
             json.dump(config_dict, fp, indent=4)
@@ -148,7 +140,7 @@ def get_parser():
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--accumulation', type=int, default=1)
-    parser.add_argument('--seed', type=int, default=5)
+    parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--train_file', required=True)
     parser.add_argument('--valid_file', required=True)
     parser.add_argument('--restore_dir')

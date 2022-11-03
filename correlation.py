@@ -2,8 +2,8 @@ import argparse
 from scipy.stats import pearsonr, spearmanr
 
 def main(args):
-    h_scores = list(map(float, open(args.human).read().rstrip().split(',')))
-    s_scores = list(map(float, open(args.system).read().rstrip()[:-1].split(',')))
+    h_scores = list(map(float, open(args.human).read().rstrip().split('\n')))
+    s_scores = list(map(float, open(args.system).read().rstrip().split('\n')))
     print('Pearson ', round(pearsonr(h_scores, s_scores)[0], 4))
     print('Spearman', round(spearmanr(h_scores, s_scores)[0], 4))
 

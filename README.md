@@ -31,8 +31,8 @@ python impara.py \
 
 ### API
 ```python
-from transformers import AutoTokenizer
-from modeling import IMPARA, QualityEstimator, SimilarityEstimator
+from transformers import AutoTokenizer, BertForSequenceClassification
+from modeling import IMPARA, SimilarityEstimator
 import json
 import os
 import torch
@@ -40,11 +40,9 @@ restore_dir = 'path/to/trained/model'
 config = json.load(open(os.path.join(restore_dir, 'impara_config.json')))
 model_id = config['model_id']
 se_model = SimilarityEstimator(model_id)
-qe_model = QualityEstimator(model_id)
-# Basically, you will load trained QualityEstimator checkpoint
-qe_model.load_state_dict(torch.load(os.path.join(restore_dir, 'pytorch_model.bin')))
-impara = IMPARA(se_model, qe_model)
-tokenizer = AutoTokenizer.from_pretrained(config['model_id'])
+qe_model = BertForSequenceClassification.from_pretrained(restore_dir)
+impara = IMPARA(se_model, qe_model, threshold=0.9)
+tokenizer = AutoTokenizer.from_pretrained(model_id)
 s_encode = tokenizer('This is sample sentence.', return_tensors='pt')
 p_encode = tokenizer('This is a sample sentence.', return_tensors='pt')
 scores = impara(
@@ -53,7 +51,7 @@ scores = impara(
     pred_input_ids=p_encode['input_ids'],
     pred_attention_mask=p_encode['attention_mask'],
 )
-print(scores) # tensor([1.0000], grad_fn=<IndexPutBackward0>)
+print(scores) # E.g. tensor([0.9878], grad_fn=<IndexPutBackward0>)
 ```
 
 # Experiments Procedure
@@ -135,9 +133,11 @@ The results will be saved as the following format.
 ```
 models/model
 ├── best
+│   ├── config.json
 │   ├── impara_config.json
 │   ├── pytorch_model.bin
 ├── last
+│   ├── config.json
 │   ├── impara_config.json
 │   └── pytorch_model.bin
 └── log.json
@@ -167,12 +167,14 @@ bash conll14_score.sh path/to/model > result.txt
 python correlation.py --human Grundkiewicz15_EW.txt --system result.txt
 ```
 
-The input of the `correleation.py` is 12 values separated by comma, corresponding to scores. 12 values correspond to `CAMB CUUI AMU POST NTHU RAC UMC PKU SJTU UFC IPN IITB` order.
+The input of the `correleation.py` is 12 lines consisting of `CAMB CUUI AMU POST NTHU RAC UMC PKU SJTU UFC IPN IITB` scores.
 
-I performed correlation experiments on the supervision data generated with three different seeds.
+Here I show the correlation between the scores of five different models trained with supervision data generated different seeds and the human's score.
 
 |Seed|Pearson|Spearman|
 |:--|:-:|:-:|
-|1|0.884|0.888|
-|2|0.938|0.923|
-|5|0.943|0.937|
+|1|0.9259|0.9371|
+|2|0.9397|0.9301|
+|3|0.9418|0.9301|
+|4|0.9413|0.9301|
+|5|0.9298|0.8881|
