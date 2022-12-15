@@ -33,13 +33,10 @@ def generate_correction_from_edits(src: str, edits: List[Edit]) -> str:
     for e in edits:
         if e.o_start == -1:
             continue
-        for _ in range(e.o_start, e.o_end):
-            try:
+        if not e.type.startswith('M'):
+            for _ in range(e.o_start, e.o_end):
                 del(tokens[e.o_start + diff])
-            except IndexError:
-                # print(f'{e.type=} {e.c_str=} {e.o_start+diff=} {e.o_end+diff=}\n{tokens=}')
-                pass
-        if e.type.startswith('U:'):
+        if e.type.startswith('U'):
             diff -= len(e.o_str.split())
             continue
 
@@ -139,10 +136,16 @@ def main(args):
         parsed_trg = annotator.parse(trg)
         edits = annotator.annotate(parsed_src, parsed_trg)
         trg_minus_sents = generate_except_each_edits(src, edits)
+        if args.verbose:
+            print(f'{src=}')
+            print(f'{trg=}')
+            edits_for_print = [(e.o_start, e.o_end, e.o_str, e.c_str, e.type) for e in edits]
+            print(f'edits={edits_for_print}')
+            print(f'{trg_minus_sents=}')
         
         impacts = edit_impact([trg] * len(trg_minus_sents), trg_minus_sents, model, tokenizer)
         impacts = impacts.tolist()
-        for _ in range(args.n_try):
+        for i in range(args.n_try):
             subset1 = get_subset(len(edits))
             subset2 = get_another_subset(subset1, len(edits))
             if subset1 == subset2:
@@ -153,6 +156,12 @@ def main(args):
             edits2 = [edits[i] for i in subset2]
             sent1 = generate_correction_from_edits(src, edits1)
             sent2 = generate_correction_from_edits(src, edits2)
+            if args.verbose:
+                print(f'{i=}')
+                print(f'{sent1=}')
+                print(f'{impact1=}')
+                print(f'{sent2=}')
+                print(f'{impact2=}')
             # Put low-impact one on the left
             if impact1 > impact2:
                 pair = [sent2, sent1]
@@ -171,9 +180,10 @@ def get_parser():
     parser.add_argument('--src', required=True)
     parser.add_argument('--trg', required=True)
     parser.add_argument('--model_id', default='bert-base-cased')
-    parser.add_argument('--seed', type=int, default=1111)
+    parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--n_generated', default=4096, help='The number of training instances')
     parser.add_argument('--n_try', default=30, help='The number of times to try generate supervisoin data from a parallel data.')
+    parser.add_argument('--verbose', action='store_true')
     
     args = parser.parse_args()
     return args
