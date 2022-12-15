@@ -8,11 +8,13 @@ class DatasetForTrainQE:
         self,
         low_examples: List[str],
         high_examples: List[str],
-        tokenizer: AutoTokenizer
+        tokenizer: AutoTokenizer,
+        max_len: int
     ):
         self.low_examples = low_examples
         self.high_examples = high_examples
         self.tokenizer = tokenizer
+        self.max_len = max_len
     
     def __len__(self):
         return len(self.low_examples)
@@ -21,8 +23,8 @@ class DatasetForTrainQE:
         low = self.low_examples[idx]
         high = self.high_examples[idx]
         
-        low_encode = self.tokenizer.batch_encode_plus([low], return_tensors='pt', max_length=512, truncation=True, padding='max_length')
-        high_encode = self.tokenizer.batch_encode_plus([high], return_tensors='pt', max_length=512, truncation=True, padding='max_length')
+        low_encode = self.tokenizer.batch_encode_plus([low], return_tensors='pt', max_length=self.max_len, truncation=True, padding='max_length')
+        high_encode = self.tokenizer.batch_encode_plus([high], return_tensors='pt', max_length=self.max_len, truncation=True, padding='max_length')
         
         return {
             'low_input_ids': low_encode['input_ids'].squeeze().to(dtype=torch.long),
@@ -31,7 +33,7 @@ class DatasetForTrainQE:
             'high_attention_mask': high_encode['attention_mask'].squeeze().to(dtype=torch.long)
         }
 
-def generate_dataset(file_path: str, tokenizer: AutoTokenizer):
+def generate_dataset(file_path: str, tokenizer: AutoTokenizer, max_len):
     low_impact_sents = []
     high_impact_sents = []
     with open(file_path) as fp:
@@ -45,15 +47,17 @@ def generate_dataset(file_path: str, tokenizer: AutoTokenizer):
     dataset = DatasetForTrainQE(
         low_impact_sents,
         high_impact_sents,
-        tokenizer
+        tokenizer,
+        max_len
     )
     return dataset
 
 class Dataset:
-    def __init__(self, srcs: List[str], preds: List[str], tokenizer: AutoTokenizer):
+    def __init__(self, srcs: List[str], preds: List[str], tokenizer: AutoTokenizer, max_len: int):
         self.srcs = srcs
         self.preds = preds
         self.tokenizer = tokenizer
+        self.max_len = max_len
 
     def __len__(self):
         return len(self.srcs)
@@ -62,8 +66,8 @@ class Dataset:
         src = self.srcs[idx]
         pred = self.preds[idx]
         
-        s_encode = self.tokenizer.batch_encode_plus([src], return_tensors='pt', max_length=512, truncation=True, padding='max_length')
-        p_encode = self.tokenizer.batch_encode_plus([pred], return_tensors='pt', max_length=512, truncation=True, padding='max_length')
+        s_encode = self.tokenizer.batch_encode_plus([src], return_tensors='pt', max_length=self.max_len, truncation=True, padding='max_length')
+        p_encode = self.tokenizer.batch_encode_plus([pred], return_tensors='pt', max_length=self.max_len, truncation=True, padding='max_length')
         
         return {
             'src_input_ids': s_encode['input_ids'].squeeze().to(dtype=torch.long),

@@ -67,6 +67,7 @@ def main(args):
     current_epoch = config.get('current_epoch', 0)
     min_valid_loss = config.get('min_valid_loss', float('inf'))
     seed = config.get('seed', args.seed)
+    max_len = config.get('max_len', args.max_len)
     log_dict = json.load(open(os.path.join(args.restore_dir, '../log.json'))) if args.restore_dir else {}
     
     torch.manual_seed(seed)
@@ -83,16 +84,20 @@ def main(args):
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     train_dataset = generate_dataset(
         file_path=args.train_file,
-        tokenizer=tokenizer
+        tokenizer=tokenizer,
+        max_len=max_len
     )
     valid_dataset = generate_dataset(
         file_path=args.valid_file,
-        tokenizer=tokenizer
+        tokenizer=tokenizer,
+        max_len=max_len
     )
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, num_workers=2)
     os.makedirs(os.path.join(args.outdir, 'best'), exist_ok=True)
     os.makedirs(os.path.join(args.outdir, 'last'), exist_ok=True)
+    tokenizer.save_pretrained(os.path.join(args.outdir, 'best'))
+    tokenizer.save_pretrained(os.path.join(args.outdir, 'last'))
     accelerator = Accelerator(gradient_accumulation_steps=args.accumulation)
     model, optimizer, train_loader, valid_loader = accelerator.prepare(
         model, optimizer, train_loader, valid_loader
@@ -113,7 +118,9 @@ def main(args):
                     'model_id': model_id,
                     'epoch': epoch,
                     'min_valid_loss': min_valid_loss,
-                    'seed': args.seed
+                    'seed': args.seed,
+                    'max_len': args.max_len,
+                    'argparse': args.__dict__
                 }
                 with open(os.path.join(args.outdir, 'best/impara_config.json'), 'w') as fp:
                     json.dump(config_dict, fp, indent=4)
@@ -124,7 +131,9 @@ def main(args):
             'model_id': model_id,
             'epoch': epoch,
             'min_valid_loss': min_valid_loss,
-            'seed': args.seed
+            'seed': args.seed,
+            'max_len': max_len,
+            'argparse': args.__dict__
         }
         with open(os.path.join(args.outdir, 'last/impara_config.json'), 'w') as fp:
             json.dump(config_dict, fp, indent=4)
@@ -138,6 +147,7 @@ def get_parser():
     parser.add_argument('--outdir', default='models/sample/')
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--max_len', type=int, default=128)
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--accumulation', type=int, default=1)
     parser.add_argument('--seed', type=int, default=1)

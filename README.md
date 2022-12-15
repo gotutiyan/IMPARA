@@ -18,31 +18,41 @@ This is an UNOFFICIAL implementation of IMPARA, one of the reference-less metric
 }
 ```
 
+# Trained Quallity Estimation model
+
+I have uploaded the trained Quality Estimation model for IMPARA to Huggingface Hub.  
+The id of the model card is `gotutiyan/IMPARA-QE`. You can use it by `BertForSequenceClassification.from_pretrained('gotutiyan/IMPARA-QE')`.
+
+`gotutiyan/IMPARA-QE` achieves 95.93 for Peason's correlation and 93.01 for Spearman's (with 'bert-base-cased' for SE model). For more information, please see [here](https://github.com/gotutiyan/IMPARA#correlation-with-human-evaluation).  
+Note that this results does not fully achieve the results of the paper.
+
 # Usage
 
 ### CLI
-You need a trained quality estimation model.
+
+If you don't specify `--restore_dir`, `gotutiyan/IMPARA-QE` will be used for the QE model.
+
 ```sh
 python impara.py \
  --src <source_file> \
- --pred <prediction_file> \
- --restore_dir <directory of trained quality estimaition model>
+ --pred <prediction_file>
+
+# If you use your custom QE model
+# python impara.py \
+#  --src <source_file> \
+#  --pred <prediction_file> \
+#  --restore_dir <directory of your custom QE model>
 ```
 
 ### API
 ```python
 from transformers import AutoTokenizer, BertForSequenceClassification
 from modeling import IMPARA, SimilarityEstimator
-import json
-import os
-import torch
-restore_dir = 'path/to/trained/model'
-config = json.load(open(os.path.join(restore_dir, 'impara_config.json')))
-model_id = config['model_id']
-se_model = SimilarityEstimator(model_id)
-qe_model = BertForSequenceClassification.from_pretrained(restore_dir)
+QE_model_id = 'gotutiyan/IMPARA-QE'
+se_model = SimilarityEstimator('bert-base-cased')
+qe_model = BertForSequenceClassification.from_pretrained(QE_model_id)
 impara = IMPARA(se_model, qe_model, threshold=0.9)
-tokenizer = AutoTokenizer.from_pretrained(model_id)
+tokenizer = AutoTokenizer.from_pretrained(QE_model_id)
 s_encode = tokenizer('This is sample sentence.', return_tensors='pt')
 p_encode = tokenizer('This is a sample sentence.', return_tensors='pt')
 scores = impara(
@@ -51,7 +61,7 @@ scores = impara(
     pred_input_ids=p_encode['input_ids'],
     pred_attention_mask=p_encode['attention_mask'],
 )
-print(scores) # E.g. tensor([0.9878], grad_fn=<IndexPutBackward0>)
+print(scores) # tensor([0.9617], grad_fn=<IndexPutBackward0>)
 ```
 
 # Experiments Procedure
@@ -169,12 +179,4 @@ python correlation.py --human Grundkiewicz15_EW.txt --system result.txt
 
 The input of the `correleation.py` is 12 lines consisting of `CAMB CUUI AMU POST NTHU RAC UMC PKU SJTU UFC IPN IITB` scores.
 
-Here I show the correlation between the scores of five different models trained with supervision data generated different seeds and the human's score.
-
-|Seed|Pearson|Spearman|
-|:--|:-:|:-:|
-|1|0.9259|0.9371|
-|2|0.9397|0.9301|
-|3|0.9418|0.9301|
-|4|0.9413|0.9301|
-|5|0.9298|0.8881|
+The trained QE model of `gotutiyan/IMPARA-QE` achieves 95.93 for Peason's correlation and 93.01 for Spearman's.
