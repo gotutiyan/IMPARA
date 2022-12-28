@@ -19,18 +19,10 @@ def main(args):
     qe_model = BertForSequenceClassification.from_pretrained(args.restore_dir)
     se_model = SimilarityEstimator('bert-base-cased')
     tokenizer = AutoTokenizer.from_pretrained(args.restore_dir)
-    model = IMPARA(se_model, qe_model, threshold=args.threshold).cuda()
+    scorer = IMPARA(se_model, qe_model, tokenizer, threshold=args.threshold).cuda()
     srcs = open(args.src_file).read().rstrip().split('\n')
     preds = open(args.pred_file).read().rstrip().split('\n')
-    dataset = Dataset(srcs, preds, tokenizer, args.max_len)
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=2)
-    scores = []
-    model.eval()
-    for _, batch in tqdm(enumerate(loader), total=len(loader)):
-        with torch.no_grad():
-            batch = {k: v.cuda() for k, v in batch.items()}
-            batch_score = model(**batch).view(-1).tolist()
-            scores += batch_score
+    scores = scorer.score(srcs, preds)
     if args.level == 'corpus':
         print(sum(scores) / len(scores))
     else:

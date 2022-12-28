@@ -48,20 +48,15 @@ python impara.py \
 ```python
 from transformers import AutoTokenizer, BertForSequenceClassification
 from modeling import IMPARA, SimilarityEstimator
-QE_model_id = 'gotutiyan/IMPARA-QE'
+
 se_model = SimilarityEstimator('bert-base-cased')
-qe_model = BertForSequenceClassification.from_pretrained(QE_model_id)
-impara = IMPARA(se_model, qe_model, threshold=0.9)
-tokenizer = AutoTokenizer.from_pretrained(QE_model_id)
-s_encode = tokenizer('This is sample sentence.', return_tensors='pt')
-p_encode = tokenizer('This is a sample sentence.', return_tensors='pt')
-scores = impara(
-    src_input_ids=s_encode['input_ids'],
-    src_attention_mask=s_encode['attention_mask'],
-    pred_input_ids=p_encode['input_ids'],
-    pred_attention_mask=p_encode['attention_mask'],
-)
-print(scores) # tensor([0.9617], grad_fn=<IndexPutBackward0>)
+qe_model = BertForSequenceClassification.from_pretrained('gotutiyan/IMPARA-QE')
+tokenizer = AutoTokenizer.from_pretrained('bert-base-cased')
+impara = IMPARA(se_model, qe_model, tokenizer, threshold=0.9).cuda()
+src_sents = ['This is a sentence .', 'This is another sentence .']
+pred_sents = ['This a is sentence .', 'This is another sentence .']
+scores = impara.score(src_sents, pred_sents)
+print(scores) # [0.16174763441085815, 0.8121877312660217]
 ```
 
 # Experiments Procedure
