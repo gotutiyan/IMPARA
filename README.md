@@ -21,7 +21,8 @@ This is an UNOFFICIAL implementation of IMPARA, one of the reference-less metric
 # Trained Quallity Estimation model
 
 I have uploaded the trained Quality Estimation model for IMPARA to Huggingface Hub.  
-The id of the model card is `gotutiyan/IMPARA-QE`. You can use it by `BertForSequenceClassification.from_pretrained('gotutiyan/IMPARA-QE')`.
+`gotutiyan/IMPARA-QE`: [model card](https://huggingface.co/gotutiyan/IMPARA-QE).  
+You can use it by `BertForSequenceClassification.from_pretrained('gotutiyan/IMPARA-QE')`.
 
 `gotutiyan/IMPARA-QE` achieves 95.93 for Peason's correlation and 93.01 for Spearman's (with 'bert-base-cased' for SE model). For more information, please see [here](https://github.com/gotutiyan/IMPARA#correlation-with-human-evaluation).  
 Note that this results does not fully achieve the results of the paper.
